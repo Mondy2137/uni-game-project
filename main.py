@@ -2,14 +2,15 @@ import pygame
 import sys
 import os
 import math
+from collections import deque
 
 # Initialize Pygame
 pygame.init()
 
 # Window settings
 GRID_SIZE = 50
-SCREEN_WIDTH = 1600
-SCREEN_HEIGHT = 900
+SCREEN_WIDTH = 1500
+SCREEN_HEIGHT = 800
 UI_HEIGHT = 100
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -28,6 +29,35 @@ tooltip_stats_font = pygame.font.SysFont('Arial', 18)
 
 clock = pygame.time.Clock()
 
+def get_grid_pos(x, y):
+    return (x // GRID_SIZE) * GRID_SIZE, (y // GRID_SIZE) * GRID_SIZE
+
+def bfs_path(start, goal, obstacles):
+    queue = deque()
+    queue.append((start, [start]))
+    visited = set()
+    visited.add(start)
+
+    while queue:
+        current, path = queue.popleft()
+        if current == goal:
+            return path
+
+        x, y = current
+        neighbors = [
+            (x + GRID_SIZE, y), (x - GRID_SIZE, y),
+            (x, y + GRID_SIZE), (x, y - GRID_SIZE)
+        ]
+
+        for nx, ny in neighbors:
+            if 0 <= nx < SCREEN_WIDTH and 0 <= ny < SCREEN_HEIGHT - UI_HEIGHT:
+                if (nx, ny) not in visited and (nx, ny) not in obstacles:
+                    visited.add((nx, ny))
+                    queue.append(((nx, ny), path + [(nx, ny)]))
+
+    print("No path found")
+    return [start]
+    
 
 def towerInit():
     global selected_tower_type, TOWERS, tower_arrow_icon, tower_cannon_icon, selected_tower_image
@@ -44,7 +74,7 @@ def towerInit():
             "image": tower_arrow_image,
             "icon": tower_arrow_icon,
             "cost": 10,
-            "damage": 10,
+            "damage": 0,
             "attack_speed": 1,
             "range": 150
         },
@@ -54,7 +84,7 @@ def towerInit():
             "icon": tower_cannon_icon,
             "cost": 20,
             "damage": 30,
-            "attack_speed": 0.1,
+            "attack_speed": 1,
             "range": 200
         }
     }
@@ -88,19 +118,27 @@ def enemyInit():
     slime_image = pygame.image.load(os.path.join("assets", "slime.png")).convert_alpha()
 
 def spawn_enemy():
+    spawn_point = SPAWN_POINTS[0]
+    start = get_grid_pos(*spawn_point)
+    goal = get_grid_pos(BASE_POSITION[0], BASE_POSITION[1]-10)
+    path = bfs_path(start, goal, occupied_tiles)
+
+
     enemy = {
-        "x": SCREEN_WIDTH // 2,
-        "y": 0,
+        "x": start[0],
+        "y": start[1],
         "image": slime_image,
         "hp": 100,
-        "max_hp": 100
+        "max_hp": 100,
+        "path": path,
+        "path_index": 0
     }
     enemies.append(enemy)
 
 def update_enemies(dt):
     global gold
-    for enemy in enemies:
-        enemy["y"] += 10 * dt
+    speed = 100  # pixels per second
+    for enemy in enemies[:]:
         if enemy["hp"] <= 0:
             enemies.remove(enemy)
             gold += 10
@@ -109,10 +147,23 @@ def update_enemies(dt):
                 "x": enemy["x"],
                 "y": enemy["y"],
                 "timer": 1.0
-    })
+            })
+            continue
+
+        if enemy["path_index"] < len(enemy["path"]):
+            target_x, target_y = enemy["path"][enemy["path_index"]]
+            dx = target_x - enemy["x"]
+            dy = target_y - enemy["y"]
+            dist = math.hypot(dx, dy)
+
+            if dist < speed * dt:
+                enemy["x"], enemy["y"] = target_x, target_y
+                enemy["path_index"] += 1
+            else:
+                enemy["x"] += (dx / dist) * speed * dt
+                enemy["y"] += (dy / dist) * speed * dt
 
 def update_towers(dt):
-
     for tower in towers:
         tower["cooldown"] -= dt
         if tower["cooldown"] <= 0:
@@ -233,7 +284,6 @@ uiInit()
 enemyInit()
 
 spawn_enemy()
-spawn_enemy()
 
 running = True
 while running:
@@ -266,6 +316,9 @@ while running:
                             })
                             occupied_tiles.add(tile_pos)
                             gold -= tower_cost
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_s:  # klawisz "S"
+                spawn_enemy()
 
     update_enemies(dt)
     update_floating_texts(dt)
