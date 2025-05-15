@@ -1,45 +1,33 @@
 import pygame
 import sys
 import os
+import math
 
+# Initialize Pygame
 pygame.init()
-
-clock = pygame.time.Clock()
 
 # Window settings
 GRID_SIZE = 50
-SCREEN_WIDTH = 1200
-SCREEN_HEIGHT = 700
+SCREEN_WIDTH = 1600
+SCREEN_HEIGHT = 900
 UI_HEIGHT = 100
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Tower Defense - Gra tegotypu")
 
-towers = []  # List for storing tower data
-enemies = []  # List for storing enemies data
+towers = []
+enemies = []
+floating_texts = []
+selected_tower_type = "arrow"
+gold = 100
 
-selected_tower_type = "arrow" # Initial selected UI element 
-gold = 100  # Starting gold amount
-
-# Load fonts
 font = pygame.font.SysFont('Arial', 30)
 tooltip_name_font = pygame.font.SysFont('Arial', 22, bold=True)
 tooltip_cost_font = pygame.font.SysFont('Arial', 20)
 tooltip_stats_font = pygame.font.SysFont('Arial', 18)
 
-# Initialize game elements
-def update_enemies():
-    for enemy in enemies:
-        enemy["y"] += 1
+clock = pygame.time.Clock()
 
-def spawn_enemy():
-    enemy = {
-        "x": SCREEN_WIDTH // 2,
-        "y": 0,
-        "image": slime_image,
-        "hp": 100
-    }
-    enemies.append(enemy)
 
 def towerInit():
     global selected_tower_type, TOWERS, tower_arrow_icon, tower_cannon_icon, selected_tower_image
@@ -57,7 +45,7 @@ def towerInit():
             "icon": tower_arrow_icon,
             "cost": 10,
             "damage": 10,
-            "attack_speed": 2,
+            "attack_speed": 1,
             "range": 150
         },
         "cannon": {
@@ -66,19 +54,13 @@ def towerInit():
             "icon": tower_cannon_icon,
             "cost": 20,
             "damage": 30,
-            "attack_speed": 1,
+            "attack_speed": 0.1,
             "range": 200
         }
     }
 
     selected_tower_type = "arrow"
     selected_tower_image = TOWERS[selected_tower_type]["image"]
-
-def enemyInit():
-    global slime_image
-    slime_image = pygame.image.load(os.path.join("assets", "slime.png")).convert_alpha()
-
-    spawn_enemy()
 
 def castleInit():
     global castle_image, BASE_SIZE, BASE_POSITION, occupied_tiles
@@ -100,6 +82,57 @@ def terrainInit():
         (SCREEN_WIDTH // 2 - GRID_SIZE, 0),
         (SCREEN_WIDTH // 2, 0)
     ]
+
+def enemyInit():
+    global slime_image
+    slime_image = pygame.image.load(os.path.join("assets", "slime.png")).convert_alpha()
+
+def spawn_enemy():
+    enemy = {
+        "x": SCREEN_WIDTH // 2,
+        "y": 0,
+        "image": slime_image,
+        "hp": 100,
+        "max_hp": 100
+    }
+    enemies.append(enemy)
+
+def update_enemies(dt):
+    global gold
+    for enemy in enemies:
+        enemy["y"] += 10 * dt
+        if enemy["hp"] <= 0:
+            enemies.remove(enemy)
+            gold += 10
+            floating_texts.append({
+                "text": "+10g",
+                "x": enemy["x"],
+                "y": enemy["y"],
+                "timer": 1.0
+    })
+
+def update_towers(dt):
+
+    for tower in towers:
+        tower["cooldown"] -= dt
+        if tower["cooldown"] <= 0:
+            tx = tower["x"] + GRID_SIZE // 2
+            ty = tower["y"] + GRID_SIZE // 2
+            for enemy in enemies:
+                ex = enemy["x"] + enemy["image"].get_width() // 2
+                ey = enemy["y"] + enemy["image"].get_height() // 2
+                distance = math.hypot(tx - ex, ty - ey)
+                if distance <= tower["range"]:
+                    enemy["hp"] -= tower["damage"]
+                    tower["cooldown"] = 1.0 / TOWERS[tower["type"]]["attack_speed"]
+                    break
+
+def update_floating_texts(dt):
+    for text in floating_texts[:]:
+        text["y"] -= 30 * dt
+        text["timer"] -= dt
+        if text["timer"] <= 0:
+            floating_texts.remove(text)
 
 def draw_terrain():
     for y in range(0, SCREEN_HEIGHT - UI_HEIGHT, GRID_SIZE):
@@ -141,13 +174,24 @@ def draw_game_elements():
         if tower_rect.collidepoint(pygame.mouse.get_pos()):
             center = (tower["x"] + GRID_SIZE // 2, tower["y"] + GRID_SIZE // 2)
             surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-            pygame.draw.circle(surface, (100, 100, 255, 80), center, tower["range"], 5)
+            pygame.draw.circle(surface, (100, 100, 255, 100), center, tower["range"], 2)
             screen.blit(surface, (0, 0))
-    
+
     for enemy in enemies:
         screen.blit(enemy["image"], (enemy["x"], enemy["y"]))
+        bar_width = 40
+        bar_height = 6
+        bar_x = enemy["x"] + (enemy["image"].get_width() - bar_width) // 2
+        bar_y = enemy["y"] - 10
+        hp_ratio = max(0, enemy["hp"] / enemy["max_hp"])
+        pygame.draw.rect(screen, (255, 0, 0), (bar_x, bar_y, bar_width, bar_height))
+        pygame.draw.rect(screen, (0, 255, 0), (bar_x, bar_y, int(bar_width * hp_ratio), bar_height))
+    
+    for text in floating_texts:
+        label = font.render(text["text"], True, (255, 215, 0))  # złoty kolor
+        screen.blit(label, (text["x"], text["y"]))
 
-def draw_ui(selected_tower_image, gold, mouse_pos):
+def draw_ui(gold, mouse_pos):
     pygame.draw.rect(screen, (50, 50, 50), (0, SCREEN_HEIGHT - UI_HEIGHT, SCREEN_WIDTH, UI_HEIGHT))
 
     gold_text = font.render(f'Gold: {gold}', True, (255, 215, 0))
@@ -181,15 +225,19 @@ def draw_tooltip(name, cost, damage, attack_speed, position):
 
     screen.blit(tooltip_bg, (position[0] + 15, position[1] - height - 10))
 
+# Initialization
 towerInit()
 castleInit()
 terrainInit()
 uiInit()
 enemyInit()
 
-# Main loop
+spawn_enemy()
+spawn_enemy()
+
 running = True
 while running:
+    dt = clock.tick(20) / 1000
     mouse_pos = pygame.mouse.get_pos()
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -212,16 +260,19 @@ while running:
                                 "y": grid_y,
                                 "type": selected_tower_type,
                                 "image": TOWERS[selected_tower_type]["image"],
-                                "range": TOWERS[selected_tower_type]["range"]
+                                "range": TOWERS[selected_tower_type]["range"],
+                                "damage": TOWERS[selected_tower_type]["damage"],
+                                "cooldown": 0
                             })
-                        occupied_tiles.add(tile_pos)
-                        gold -= tower_cost
+                            occupied_tiles.add(tile_pos)
+                            gold -= tower_cost
 
+    update_enemies(dt)
+    update_floating_texts(dt)
+    update_towers(dt)
     draw_game_elements()
-    draw_ui(selected_tower_image, gold, mouse_pos)
-    update_enemies()
+    draw_ui(gold, mouse_pos)
     pygame.display.flip()
-    dt = clock.tick(20) / 1000
 
 pygame.quit()
 sys.exit()
