@@ -60,7 +60,10 @@ def bfs_path(start, goal, obstacles):
     
 
 def towerInit():
-    global selected_tower_type, TOWERS, tower_arrow_icon, tower_cannon_icon, selected_tower_image
+    global selected_tower_type, TOWERS, tower_arrow_icon, tower_cannon_icon, wall_icon, selected_tower_image
+
+    wall_image = pygame.image.load(os.path.join("assets", "wall.png"))
+    wall_icon = pygame.transform.scale(wall_image, (60, 60))
 
     tower_arrow_image = pygame.image.load(os.path.join("assets", "towerArrow.png"))
     tower_arrow_icon = pygame.transform.scale(tower_arrow_image, (60, 60))
@@ -86,6 +89,15 @@ def towerInit():
             "damage": 30,
             "attack_speed": 1,
             "range": 200
+        },
+        "wall": {
+            "name": "Wall",
+            "image": wall_image,
+            "icon": wall_icon,
+            "cost": 5,
+            "damage": 0,
+            "attack_speed": 0,
+            "range": 0
         }
     }
 
@@ -165,6 +177,8 @@ def update_enemies(dt):
 
 def update_towers(dt):
     for tower in towers:
+        if tower["type"] == "wall":
+            continue
         tower["cooldown"] -= dt
         if tower["cooldown"] <= 0:
             tx = tower["x"] + GRID_SIZE // 2
@@ -305,13 +319,14 @@ while running:
                     if tile_pos not in occupied_tiles:
                         tower_cost = TOWERS[selected_tower_type]["cost"]
                         if gold >= tower_cost:
+                            tower_data = TOWERS[selected_tower_type]
                             towers.append({
                                 "x": grid_x,
                                 "y": grid_y,
                                 "type": selected_tower_type,
-                                "image": TOWERS[selected_tower_type]["image"],
-                                "range": TOWERS[selected_tower_type]["range"],
-                                "damage": TOWERS[selected_tower_type]["damage"],
+                                "image": tower_data["image"],
+                                "range": tower_data.get("range", 0),
+                                "damage": tower_data.get("damage", 0),
                                 "cooldown": 0
                             })
                             occupied_tiles.add(tile_pos)
