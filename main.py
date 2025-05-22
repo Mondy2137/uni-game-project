@@ -22,10 +22,19 @@ floating_texts = []
 selected_tower_type = "arrow"
 gold = 100
 
+logo = pygame.image.load(os.path.join("assets", "logo.png"))
+logo = pygame.transform.scale(logo, (800, 450))
+
+start_button_image = pygame.image.load(os.path.join("assets", "start_button.png"))
+start_button_image = pygame.transform.scale(start_button_image, (500, 300))
+
 font = pygame.font.SysFont('Arial', 30)
 tooltip_name_font = pygame.font.SysFont('Arial', 22, bold=True)
 tooltip_cost_font = pygame.font.SysFont('Arial', 20)
 tooltip_stats_font = pygame.font.SysFont('Arial', 18)
+
+title_font = pygame.font.SysFont('Arial', 60)
+button_font = pygame.font.SysFont('Arial', 40)
 
 clock = pygame.time.Clock()
 
@@ -58,6 +67,45 @@ def bfs_path(start, goal, obstacles):
     print("No path found")
     return [start]
     
+def show_start_screen():
+    while True:
+        screen.fill((30, 30, 30))
+
+        screen.blit(logo, (SCREEN_WIDTH // 2 - logo.get_width() // 2, 35))
+
+        button_x = SCREEN_WIDTH // 2 - start_button_image.get_width() // 2
+        button_y = 400
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+
+        is_hovered = (button_x <= mouse_x <= button_x + start_button_image.get_width() and
+                      button_y <= mouse_y <= button_y + start_button_image.get_height())
+
+        if is_hovered:
+            hover_offset = 5
+            brightness = 1.2
+        else:
+            hover_offset = 0
+            brightness = 1.0
+
+        button_effect = start_button_image.copy()
+        arr = pygame.surfarray.pixels3d(button_effect)
+        arr[:] = (arr * brightness).clip(0, 255)
+        del arr
+
+        screen.blit(button_effect, (button_x, button_y + hover_offset))
+        button_rect = pygame.Rect(button_x, button_y + hover_offset, start_button_image.get_width(), start_button_image.get_height())
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN and is_hovered:
+                return
+
+
+
 
 def towerInit():
     global selected_tower_type, TOWERS, tower_arrow_icon, tower_cannon_icon, wall_icon, selected_tower_image
@@ -322,6 +370,10 @@ def draw_tooltip(name, cost, damage, attack_speed, position):
     tooltip_bg.blit(speed_text, (10, name_text.get_height() + cost_text.get_height() + damage_text.get_height() + 15))
 
     screen.blit(tooltip_bg, (position[0] + 15, position[1] - height - 10))
+
+
+
+show_start_screen()
 
 # Initialization
 towerInit()
