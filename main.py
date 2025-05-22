@@ -149,7 +149,7 @@ def spawn_enemy():
 
 def update_enemies(dt):
     global gold
-    speed = 100  # pixels per second
+    speed = 100
     for enemy in enemies[:]:
         if enemy["hp"] <= 0:
             enemies.remove(enemy)
@@ -171,9 +171,19 @@ def update_enemies(dt):
             if dist < speed * dt:
                 enemy["x"], enemy["y"] = target_x, target_y
                 enemy["path_index"] += 1
+
+                current_tile = (enemy["x"], enemy["y"])
+                goal = get_grid_pos(BASE_POSITION[0], BASE_POSITION[1] - 10)
+                new_path = bfs_path(current_tile, goal, occupied_tiles)
+
+                if new_path != [current_tile]:
+                    enemy["path"] = new_path
+                    enemy["path_index"] = 1
+
             else:
                 enemy["x"] += (dx / dist) * speed * dt
                 enemy["y"] += (dy / dist) * speed * dt
+
 
 def update_towers(dt):
     for tower in towers:
@@ -214,7 +224,7 @@ def draw_terrain():
         pygame.draw.line(screen, (0, 100, 0), (0, y), (SCREEN_WIDTH, y), 1)
 
 def uiInit():
-    global ui_buttons
+    global ui_buttons, warning_message, warning_timer
     ui_buttons = []
     button_x = 20
     for tower_type, tower_data in TOWERS.items():
@@ -228,6 +238,9 @@ def uiInit():
             "icon_pos": (icon_x, icon_y)
         })
         button_x += rect.width + 40
+
+    warning_message = ""
+    warning_timer = 0
 
 def draw_game_elements():
     draw_terrain()
@@ -257,6 +270,7 @@ def draw_game_elements():
         screen.blit(label, (text["x"], text["y"]))
 
 def draw_ui(gold, mouse_pos):
+    global warning_message, warning_timer
     pygame.draw.rect(screen, (50, 50, 50), (0, SCREEN_HEIGHT - UI_HEIGHT, SCREEN_WIDTH, UI_HEIGHT))
 
     gold_text = font.render(f'Gold: {gold}', True, (255, 215, 0))
@@ -271,6 +285,25 @@ def draw_ui(gold, mouse_pos):
         if button["rect"].collidepoint(mouse_pos):
             tower_data = TOWERS[button["type"]]
             draw_tooltip(tower_data["name"], tower_data["cost"], tower_data["damage"], tower_data["attack_speed"], mouse_pos)
+
+    if warning_timer > 0:
+        warning_label = font.render(warning_message, True, (255, 50, 50))
+
+        padding = 10
+        bg_width = warning_label.get_width() + padding * 2
+        bg_height = warning_label.get_height() + padding * 2
+
+        bg_surface = pygame.Surface((bg_width, bg_height), pygame.SRCALPHA)
+        bg_surface.fill((0, 0, 0, 180))
+
+        pos_x = 20
+        pos_y = SCREEN_HEIGHT - UI_HEIGHT - bg_height - 10
+
+        screen.blit(bg_surface, (pos_x, pos_y))
+        screen.blit(warning_label, (pos_x + padding, pos_y + padding))
+
+        warning_timer -= dt
+
 
 def draw_tooltip(name, cost, damage, attack_speed, position):
     name_text = tooltip_name_font.render(name, True, (255, 255, 255))
@@ -317,22 +350,57 @@ while running:
                     grid_y = (mouse_y // GRID_SIZE) * GRID_SIZE
                     tile_pos = (grid_x, grid_y)
                     if tile_pos not in occupied_tiles:
-                        tower_cost = TOWERS[selected_tower_type]["cost"]
-                        if gold >= tower_cost:
-                            tower_data = TOWERS[selected_tower_type]
-                            towers.append({
-                                "x": grid_x,
-                                "y": grid_y,
-                                "type": selected_tower_type,
-                                "image": tower_data["image"],
-                                "range": tower_data.get("range", 0),
-                                "damage": tower_data.get("damage", 0),
-                                "cooldown": 0
-                            })
-                            occupied_tiles.add(tile_pos)
-                            gold -= tower_cost
+                        blocked_by_enemy = False
+                        for enemy in enemies:
+                            enemy_tile = get_grid_pos(enemy["x"], enemy["y"])
+                            if tile_pos == enemy_tile:
+                                blocked_by_enemy = True
+                                break
+                            if enemy["path_index"] < len(enemy["path"]):
+                                next_tile = enemy["path"][enemy["path_index"]]
+                                if tile_pos == next_tile:
+                                    blocked_by_enemy = True
+                                    break
+
+                        if blocked_by_enemy:
+                            warning_message = "Nie możesz budować bezpośrednio na wrogu!"
+                            warning_timer = 2
+                        else:
+                            hypothetical_obstacles = occupied_tiles.copy()
+                            hypothetical_obstacles.add(tile_pos)
+                            path_blocked = False
+                            for spawn_point in SPAWN_POINTS:
+                                start = get_grid_pos(*spawn_point)
+                                goal = get_grid_pos(BASE_POSITION[0], BASE_POSITION[1] - 10)
+                                if bfs_path(start, goal, hypothetical_obstacles) == [start]:
+                                    path_blocked = True
+                                    break
+
+                            if path_blocked:
+                                warning_message = "Nie można zablokować drogi do zamku!"
+                                warning_timer = 2
+                            else:
+                                tower_cost = TOWERS[selected_tower_type]["cost"]
+                                if gold >= tower_cost:
+                                    tower_data = TOWERS[selected_tower_type]
+                                    towers.append({
+                                        "x": grid_x,
+                                        "y": grid_y,
+                                        "type": selected_tower_type,
+                                        "image": tower_data["image"],
+                                        "range": tower_data.get("range", 0),
+                                        "damage": tower_data.get("damage", 0),
+                                        "cooldown": 0
+                                    })
+                                    occupied_tiles.add(tile_pos)
+                                    gold -= tower_cost
+                                else:
+                                    warning_message = "Za mało złota!"
+                                    warning_timer = 2
+
+
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_s:  # klawisz "S"
+            if event.key == pygame.K_s:
                 spawn_enemy()
 
     update_enemies(dt)
