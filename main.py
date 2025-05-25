@@ -38,6 +38,17 @@ button_font = pygame.font.SysFont('Arial', 40)
 
 clock = pygame.time.Clock()
 
+current_round = 0
+max_rounds = 5
+enemies_to_spawn = 0
+spawn_interval = 0.5
+spawn_timer = 0
+round_timer = 10
+between_round_delay = 20 
+round_active = False
+game_over = False
+
+
 def get_grid_pos(x, y):
     return (x // GRID_SIZE) * GRID_SIZE, (y // GRID_SIZE) * GRID_SIZE
 
@@ -104,8 +115,11 @@ def show_start_screen():
             elif event.type == pygame.MOUSEBUTTONDOWN and is_hovered:
                 return
 
-
-
+def start_round(enemy_count):
+    global enemies_to_spawn, spawn_timer, round_active
+    enemies_to_spawn = enemy_count
+    spawn_timer = 0
+    round_active = True
 
 def towerInit():
     global selected_tower_type, TOWERS, tower_arrow_icon, tower_cannon_icon, wall_icon, selected_tower_image
@@ -196,7 +210,7 @@ def spawn_enemy():
     enemies.append(enemy)
 
 def update_enemies(dt):
-    global gold
+    global gold, game_over
     speed = 100
     for enemy in enemies[:]:
         if enemy["hp"] <= 0:
@@ -231,6 +245,11 @@ def update_enemies(dt):
             else:
                 enemy["x"] += (dx / dist) * speed * dt
                 enemy["y"] += (dy / dist) * speed * dt
+
+        goal_tile = get_grid_pos(BASE_POSITION[0], BASE_POSITION[1] - 10)
+        enemy_tile = get_grid_pos(enemy["x"], enemy["y"])
+        if enemy_tile == goal_tile:
+            game_over = True         
 
 
 def update_towers(dt):
@@ -314,7 +333,7 @@ def draw_game_elements():
         pygame.draw.rect(screen, (0, 255, 0), (bar_x, bar_y, int(bar_width * hp_ratio), bar_height))
     
     for text in floating_texts:
-        label = font.render(text["text"], True, (255, 215, 0))  # złoty kolor
+        label = font.render(text["text"], True, (255, 215, 0))
         screen.blit(label, (text["x"], text["y"]))
 
 def draw_ui(gold, mouse_pos):
@@ -351,6 +370,12 @@ def draw_ui(gold, mouse_pos):
         screen.blit(warning_label, (pos_x + padding, pos_y + padding))
 
         warning_timer -= dt
+        
+    round_text = f"Runda: {current_round}/{max_rounds}"
+    status_text = f"Start za: {int(round_timer)}s" if not round_active and current_round < max_rounds else "Walka!"
+    label = font.render(round_text + "  |  " + status_text, True, (255, 255, 255))
+    screen.blit(label, (SCREEN_WIDTH // 2 - label.get_width() // 2, SCREEN_HEIGHT - UI_HEIGHT + 30))
+
 
 
 def draw_tooltip(name, cost, damage, attack_speed, position):
@@ -382,10 +407,15 @@ terrainInit()
 uiInit()
 enemyInit()
 
-spawn_enemy()
-
 running = True
 while running:
+    if game_over:
+        screen.fill((30, 0, 0))
+        lose_text = title_font.render("Przegrana!", True, (255, 50, 50))
+        screen.blit(lose_text, (SCREEN_WIDTH // 2 - lose_text.get_width() // 2, SCREEN_HEIGHT // 2 - lose_text.get_height() // 2))
+        pygame.display.flip()
+        continue
+
     dt = clock.tick(20) / 1000
     mouse_pos = pygame.mouse.get_pos()
     for event in pygame.event.get():
@@ -449,11 +479,22 @@ while running:
                                 else:
                                     warning_message = "Za mało złota!"
                                     warning_timer = 2
-
-
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_s:
+    # waves
+    if round_active:
+        if enemies_to_spawn > 0:
+            spawn_timer -= dt
+            if spawn_timer <= 0:
                 spawn_enemy()
+                enemies_to_spawn -= 1
+                spawn_timer = spawn_interval
+        elif len(enemies) == 0:
+            round_active = False
+            round_timer = between_round_delay
+    else:
+        round_timer -= dt
+        if round_timer <= 0 and current_round < max_rounds:
+            current_round += 1
+            start_round(enemy_count=5 + current_round * 2)
 
     update_enemies(dt)
     update_floating_texts(dt)
