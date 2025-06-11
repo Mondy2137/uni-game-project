@@ -115,6 +115,30 @@ def show_start_screen():
             elif event.type == pygame.MOUSEBUTTONDOWN and is_hovered:
                 return
 
+def reset_game():
+    global towers, enemies, floating_texts, selected_tower_type, selected_tower_image
+    global gold, current_round, enemies_to_spawn, spawn_timer, round_timer
+    global round_active, game_over, occupied_tiles
+
+    towers = []
+    enemies = []
+    floating_texts = []
+    selected_tower_type = "arrow"
+    selected_tower_image = TOWERS[selected_tower_type]["image"]
+    gold = 100
+
+    current_round = 0
+    enemies_to_spawn = 0
+    spawn_timer = 0
+    round_timer = 10
+    round_active = False
+    game_over = False
+
+    occupied_tiles.clear()
+    for y in range(BASE_POSITION[1], BASE_POSITION[1] + BASE_SIZE, GRID_SIZE):
+        for x in range(BASE_POSITION[0], BASE_POSITION[0] + BASE_SIZE, GRID_SIZE):
+            occupied_tiles.add((x, y))
+
 def start_round(enemy_count):
     global enemies_to_spawn, spawn_timer, round_active
     enemies_to_spawn = enemy_count
@@ -412,9 +436,31 @@ while running:
     if game_over:
         screen.fill((30, 0, 0))
         lose_text = title_font.render("Przegrana!", True, (255, 50, 50))
-        screen.blit(lose_text, (SCREEN_WIDTH // 2 - lose_text.get_width() // 2, SCREEN_HEIGHT // 2 - lose_text.get_height() // 2))
+        screen.blit(lose_text, (SCREEN_WIDTH // 2 - lose_text.get_width() // 2, 200))
+
+        button_width, button_height = 300, 100
+        button_x = SCREEN_WIDTH // 2 - button_width // 2
+        button_y = 350
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+
+        button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
+        is_hovered = button_rect.collidepoint(mouse_x, mouse_y)
+
+        pygame.draw.rect(screen, (100, 100, 255) if is_hovered else (70, 70, 200), button_rect, border_radius=12)
+        reset_text = button_font.render("Zagraj ponownie", True, (255, 255, 255))
+        screen.blit(reset_text, (button_x + button_width // 2 - reset_text.get_width() // 2,
+                                 button_y + button_height // 2 - reset_text.get_height() // 2))
+
         pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN and is_hovered:
+                reset_game()
         continue
+
 
     dt = clock.tick(20) / 1000
     mouse_pos = pygame.mouse.get_pos()
