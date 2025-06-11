@@ -139,8 +139,8 @@ def towerInit():
             "image": tower_arrow_image,
             "icon": tower_arrow_icon,
             "cost": 10,
-            "damage": 0,
-            "attack_speed": 1,
+            "damage": 5,
+            "attack_speed": 3.5,
             "range": 150
         },
         "cannon": {
